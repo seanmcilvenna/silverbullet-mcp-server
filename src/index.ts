@@ -28,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { SilverBulletClient } from "./sb.js";
-import { buildMcpServer } from "./mcp.js";
+import { buildMcpServer, loadMcpInstructions } from "./mcp.js";
 import { mountOAuth, type OAuthHandle } from "./oauth.js";
 
 // ---- env ----------------------------------------------------------------
@@ -51,6 +51,8 @@ const OAUTH_CLIENT_SECRET = requireEnv("OAUTH_CLIENT_SECRET");
 const OWNER_TOKEN         = requireEnv("OWNER_TOKEN");
 const JWT_SIGNING_KEY     = requireEnv("JWT_SIGNING_KEY");
 const PORT = parseInt(process.env.PORT ?? "8080", 10);
+// Fail boot for an explicitly configured but unreadable instructions file.
+const MCP_INSTRUCTIONS = loadMcpInstructions();
 
 // 90 days, per the agreed token lifetime.
 const TOKEN_LIFETIME_SECONDS = 90 * 24 * 60 * 60;
@@ -153,7 +155,7 @@ app.post("/mcp", requireAuth, async (req, res) => {
       if (transport!.sessionId) transports.delete(transport!.sessionId);
     };
 
-    const server = buildMcpServer(sb);
+    const server = buildMcpServer(sb, MCP_INSTRUCTIONS);
     await server.connect(transport);
   }
 

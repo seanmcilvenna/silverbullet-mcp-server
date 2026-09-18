@@ -6,6 +6,16 @@ trade-off behind it, since the reasoning is often more useful than the diff.
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.1] — Deployment-specific MCP instructions
+
+### Added
+
+- Optional `MCP_INSTRUCTIONS` deployment setting for publishing MCP server
+  instructions to compatible clients during MCP initialization.
+- Optional `MCP_INSTRUCTIONS_FILE` support. When configured, its UTF-8 file
+  content takes precedence over `MCP_INSTRUCTIONS`; a configured unreadable file
+  fails startup clearly rather than silently ignoring deployment configuration.
+
 ## [0.6.0] — Safe page moves; append/prepend tightening
 
 ### Added

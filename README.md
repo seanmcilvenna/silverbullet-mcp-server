@@ -35,7 +35,7 @@ flagged below.
 - Safe page moves (`move_page`): read→create→delete with a source-unchanged guard; never leaves a caller able to clobber an interim edit.
 - Soft-delete, body-size cap, path validation, audit logging.
 
-Status: **v0.6**. See the [CHANGELOG](./CHANGELOG.md) for the full version
+Status: **v0.6.1**. See the [CHANGELOG](./CHANGELOG.md) for the full version
 history and the design reasoning behind each release.
 
 ## Architecture
@@ -106,13 +106,16 @@ revisit if latency bites.
 
 ## Environment
 
-See `.env.example`. All of the below are required at boot.
+See `.env.example`. All variables are required at boot except the optional
+deployment-specific MCP instruction settings noted below.
 
 | Variable               | What it is                                                                 |
 | ---------------------- | -------------------------------------------------------------------------- |
 | `SB_URL`               | Base URL of the SilverBullet instance (no trailing slash).                 |
 | `SB_TOKEN`             | The `SB_AUTH_TOKEN` configured on the SilverBullet side.                   |
 | `MCP_TOKEN`            | Static Bearer accepted as a dev/curl bypass. Generate with `openssl rand`. |
+| `MCP_INSTRUCTIONS`     | Optional deployment-specific MCP instructions surfaced to compatible clients; not a secret. |
+| `MCP_INSTRUCTIONS_FILE`| Optional UTF-8 instructions-file path; takes precedence over `MCP_INSTRUCTIONS`; not a secret. |
 | `PUBLIC_URL`           | Canonical URL of this MCP server. Goes into OAuth metadata documents.      |
 | `OAUTH_CLIENT_ID`      | Opaque string. Paste into Claude.ai connector "Advanced settings."         |
 | `OAUTH_CLIENT_SECRET`  | Opaque string. Paste into Claude.ai connector "Advanced settings."         |
@@ -155,6 +158,62 @@ curl -X POST http://localhost:8080/mcp \
       "clientInfo":{"name":"curl","version":"0"}
     }
   }'
+```
+
+## Server instructions
+
+MCP server instructions are optional behavioral guidance published in the MCP
+`initialize` response. Compatible clients may automatically expose them to the
+model, although client support and presentation vary. Use them to configure one
+container image differently per deployment—for example, a Personal deployment
+and a Work deployment can each publish their own knowledge-handling guidance
+without putting either policy in this repository.
+
+Set `MCP_INSTRUCTIONS` to a normal or multiline environment value. The server
+preserves internal newlines and removes only leading/trailing whitespace. To
+keep a longer policy in a mounted UTF-8 file, set `MCP_INSTRUCTIONS_FILE`
+instead; when both values are set, the file wins. A configured file that cannot
+be read fails startup clearly so a misconfigured deployment is not silent.
+
+These values are **not secrets** and are **not a security boundary**. Server
+instructions are advisory context, not authorization: rules such as restricting
+access to a person's pages or a path prefix must be enforced server-side through
+authorization, tool design, or SilverBullet permissions.
+
+### Railway
+
+Add this deployment variable in Railway (using its multiline-value editor when
+needed):
+
+```text
+MCP_INSTRUCTIONS=Use this server as my persistent knowledge store.
+Record durable notes carefully and preserve existing context.
+```
+
+### Docker Compose
+
+Use the same image with a different deployment policy:
+
+```yaml
+services:
+  silverbullet-mcp:
+    image: your-registry/silverbullet-mcp-server:0.6.1
+    environment:
+      MCP_INSTRUCTIONS: |
+        Use this server as my persistent knowledge store.
+        Record durable notes carefully and preserve existing context.
+```
+
+For a file-based policy, mount a UTF-8 file into the container and configure its
+path:
+
+```yaml
+services:
+  silverbullet-mcp:
+    volumes:
+      - ./deployment/mcp-instructions.md:/run/config/mcp-instructions.md:ro
+    environment:
+      MCP_INSTRUCTIONS_FILE: /run/config/mcp-instructions.md
 ```
 
 ## Deploy

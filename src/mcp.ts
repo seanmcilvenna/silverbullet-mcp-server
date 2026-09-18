@@ -15,6 +15,7 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import {
   BodyTooLargeError,
@@ -29,6 +30,30 @@ import {
 } from "./sb.js";
 
 type WriteAction = "create" | "write" | "append" | "prepend" | "delete" | "move";
+
+/**
+ * Load deployment-specific MCP instructions.
+ *
+ * MCP instructions are advisory context for compatible clients and models; they
+ * are not an authorization or access-control mechanism. Enforce access rules
+ * through server-side authorization, tool design, or SilverBullet permissions.
+ */
+export function loadMcpInstructions(): string | undefined {
+  const file = process.env.MCP_INSTRUCTIONS_FILE?.trim();
+
+  if (file) {
+    try {
+      const value = readFileSync(file, "utf8").trim();
+      return value || undefined;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Unable to read MCP_INSTRUCTIONS_FILE ${JSON.stringify(file)}: ${message}`);
+    }
+  }
+
+  const value = process.env.MCP_INSTRUCTIONS?.trim();
+  return value || undefined;
+}
 
 /**
  * Emit a structured write-audit line to stderr.
@@ -234,11 +259,19 @@ function mapToolError(err: unknown, ctx: { tool: string; page?: string }) {
   });
 }
 
-export function buildMcpServer(sb: SilverBulletClient): McpServer {
-  const server = new McpServer({
-    name: "silverbullet",
-    version: "0.6.0",
-  });
+export function buildMcpServer(
+  sb: SilverBulletClient,
+  instructions = loadMcpInstructions(),
+): McpServer {
+  const server = new McpServer(
+    {
+      name: "silverbullet",
+      version: "0.6.1",
+    },
+    {
+      instructions,
+    },
+  );
 
   server.registerTool(
     "list_pages",
