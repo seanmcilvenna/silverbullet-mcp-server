@@ -6,6 +6,17 @@ trade-off behind it, since the reasoning is often more useful than the diff.
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.6.2] — Explicit knowledge-policy retrieval
+
+### Added
+
+- `get_knowledge_policy` MCP tool. It returns the same startup-resolved
+  deployment instructions published during initialization, allowing compatible
+  clients that do not surface initialization instructions to retrieve the policy
+  explicitly before writing knowledge.
+- A concise policy-retrieval reminder in the `create_page`, `write_page`,
+  `append_to_page`, `prepend_to_page`, and `move_page` tool descriptions.
+
 ## [0.6.1] — Deployment-specific MCP instructions
 
 ### Added

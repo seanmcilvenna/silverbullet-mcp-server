@@ -31,6 +31,15 @@ import {
 
 type WriteAction = "create" | "write" | "append" | "prepend" | "delete" | "move";
 
+const NO_KNOWLEDGE_POLICY_MESSAGE =
+  "No deployment-specific knowledge policy is configured for this MCP server.";
+
+const KNOWLEDGE_POLICY_DESCRIPTION =
+  "Retrieve the authoritative active knowledge-management policy for this SilverBullet MCP server, including instructions for knowledge capture, journaling, goals, objectives, projects, tags, relationships, time tracking, and other deployment-specific conventions. Call this tool before creating or modifying SilverBullet knowledge, particularly when the active policy has not yet been retrieved in the current conversation. Use the returned policy to guide subsequent SilverBullet operations.";
+
+const POLICY_RETRIEVAL_REMINDER =
+  " Before modifying SilverBullet knowledge, retrieve the active policy using get_knowledge_policy if it has not already been loaded.";
+
 /**
  * Load deployment-specific MCP instructions.
  *
@@ -266,11 +275,27 @@ export function buildMcpServer(
   const server = new McpServer(
     {
       name: "silverbullet",
-      version: "0.6.1",
+      version: "0.6.2",
     },
     {
       instructions,
     },
+  );
+
+  server.registerTool(
+    "get_knowledge_policy",
+    {
+      title: "Get knowledge policy",
+      description: KNOWLEDGE_POLICY_DESCRIPTION,
+    },
+    async () => ({
+      content: [
+        {
+          type: "text",
+          text: instructions ?? NO_KNOWLEDGE_POLICY_MESSAGE,
+        },
+      ],
+    }),
   );
 
   server.registerTool(
@@ -388,7 +413,8 @@ export function buildMcpServer(
     {
       title: "Create page",
       description:
-        "Create a brand-new page. Errors if the page already exists — use write_page if you intend to overwrite. Returns the resulting {path, lastModified}, leaving the caller write-ready for a follow-up write_page. Path is validated; cannot write into _trash/. Body is capped at 256 KB.",
+        "Create a brand-new page. Errors if the page already exists — use write_page if you intend to overwrite. Returns the resulting {path, lastModified}, leaving the caller write-ready for a follow-up write_page. Path is validated; cannot write into _trash/. Body is capped at 256 KB." +
+        POLICY_RETRIEVAL_REMINDER,
       inputSchema: {
         page: z.string().min(1).describe("Page name relative to the space root, without the .md suffix"),
         body: z.string().describe("Full markdown content for the new page"),
@@ -415,7 +441,8 @@ export function buildMcpServer(
     {
       title: "Write page (overwrite, collision-safe)",
       description:
-        "OVERWRITES an existing page wholesale. Requires expected_last_modified — the lastModified value the caller obtained from a prior read_page (or list_pages). If the server's current value differs, the write is rejected with a conflict error and the caller should re-read to reconcile. Refuses to create new pages; route those through create_page. Refuses paths under _trash/. Body is capped at 256 KB. Returns the new lastModified, leaving the caller write-ready for further overwrites. For adding to existing content, prefer append_to_page or prepend_to_page (no version handshake needed, since they merge server-side).",
+        "OVERWRITES an existing page wholesale. Requires expected_last_modified — the lastModified value the caller obtained from a prior read_page (or list_pages). If the server's current value differs, the write is rejected with a conflict error and the caller should re-read to reconcile. Refuses to create new pages; route those through create_page. Refuses paths under _trash/. Body is capped at 256 KB. Returns the new lastModified, leaving the caller write-ready for further overwrites. For adding to existing content, prefer append_to_page or prepend_to_page (no version handshake needed, since they merge server-side)." +
+        POLICY_RETRIEVAL_REMINDER,
       inputSchema: {
         page: z.string().min(1).describe("Page name relative to the space root, without the .md suffix"),
         body: z.string().describe("Full markdown content to write (replaces any existing body)"),
@@ -454,7 +481,8 @@ export function buildMcpServer(
     {
       title: "Append to page",
       description:
-        "Append a block of text to the end of an existing page, separated by a blank line. Errors if the page does not exist — use create_page for new pages. The existing page body is read server-side and never round-trips through this conversation, which avoids accidental modification of existing content. Final page size is capped at 256 KB. Does not return lastModified — append intentionally leaves the caller without a version marker, since you have not seen the full body and so are not in a position to follow up with write_page. Call read_page if you need to.",
+        "Append a block of text to the end of an existing page, separated by a blank line. Errors if the page does not exist — use create_page for new pages. The existing page body is read server-side and never round-trips through this conversation. Final page size is capped at 256 KB. Does not return lastModified — append intentionally leaves the caller without a version marker, since you have not seen the full body and so are not in a position to follow up with write_page. Call read_page if you need to." +
+        POLICY_RETRIEVAL_REMINDER,
       inputSchema: {
         page: z.string().min(1).describe("Page name relative to the space root, without the .md suffix"),
         content: z.string().min(1).describe("Text to append"),
@@ -478,7 +506,8 @@ export function buildMcpServer(
     {
       title: "Prepend to page",
       description:
-        "Insert content at the top of an existing page. By default, inserts after YAML frontmatter if present (so frontmatter stays at byte 0); set position to \"top\" to force insertion at byte 0 even when frontmatter exists. Errors if the page does not exist — use create_page for new pages. The existing page body is read server-side and never round-trips through this conversation. Final page size is capped at 256 KB. Does not return lastModified — prepend intentionally leaves the caller without a version marker, since you have not seen the full body and so are not in a position to follow up with write_page. Call read_page if you need to.",
+        "Insert content at the top of an existing page. By default, inserts after YAML frontmatter if present (so frontmatter stays at byte 0); set position to \"top\" to force insertion at byte 0 even when frontmatter exists. Errors if the page does not exist — use create_page for new pages. The existing page body is read server-side and never round-trips through this conversation. Final page size is capped at 256 KB. Does not return lastModified — prepend intentionally leaves the caller without a version marker, since you have not seen the full body and so are not in a position to follow up with write_page. Call read_page if you need to." +
+        POLICY_RETRIEVAL_REMINDER,
       inputSchema: {
         page: z.string().min(1).describe("Page name relative to the space root, without the .md suffix"),
         content: z.string().min(1).describe("Text to insert"),
@@ -532,7 +561,8 @@ export function buildMcpServer(
     {
       title: "Move page",
       description:
-        "Move a page to a new location (read → create destination → delete source). Refuses if the destination already exists. If the source was edited between the read and the delete, the delete is skipped — leaving a recoverable duplicate at the destination rather than losing interim edits. Does NOT rewrite [[backlinks]] — SilverBullet's backlink-rewriting Rename is an editor-only command, not reachable over HTTP. Returns {from, to, moved} with no version marker. One approval covers both the create and the soft-delete.",
+        "Move a page to a new location (read → create destination → delete source). Refuses if the destination already exists. If the source was edited between the read and the delete, the delete is skipped — leaving a recoverable duplicate at the destination rather than losing interim edits. Does NOT rewrite [[backlinks]] — SilverBullet's backlink-rewriting Rename is an editor-only command, not reachable over HTTP. Returns {from, to, moved} with no version marker. One approval covers both the create and the soft-delete." +
+        POLICY_RETRIEVAL_REMINDER,
       inputSchema: {
         from: z.string().min(1).describe("Source page name to move"),
         to: z.string().min(1).describe("Destination page name"),

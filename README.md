@@ -35,7 +35,7 @@ flagged below.
 - Safe page moves (`move_page`): read→create→delete with a source-unchanged guard; never leaves a caller able to clobber an interim edit.
 - Soft-delete, body-size cap, path validation, audit logging.
 
-Status: **v0.6.1**. See the [CHANGELOG](./CHANGELOG.md) for the full version
+Status: **v0.6.2**. See the [CHANGELOG](./CHANGELOG.md) for the full version
 history and the design reasoning behind each release.
 
 ## Architecture
@@ -74,6 +74,7 @@ Any of them can rotate without touching the others.
 
 | Tool           | Inputs                             | Returns                                              |
 | -------------- | ---------------------------------- | ---------------------------------------------------- |
+| `get_knowledge_policy` | None                           | The active deployment-specific knowledge-management policy, or an explicit message when none is configured. Does not contact SilverBullet. |
 | `list_pages`   | `include_trash?` (bool, def false) | Every `.md` page in the space, sorted by recency. Each entry carries `{page, path, lastModified}`. |
 | `read_page`    | `page` (string)                    | Two content blocks: `[0]` JSON envelope `{path, lastModified}`, `[1]` raw markdown body. The `lastModified` is the version marker for a follow-up `write_page`. |
 | `search_pages` | `query`, `limit?`, `include_trash?`| Top substring matches with snippets and match counts. |
@@ -169,11 +170,29 @@ container image differently per deployment—for example, a Personal deployment
 and a Work deployment can each publish their own knowledge-handling guidance
 without putting either policy in this repository.
 
+Some MCP clients may not reliably expose initialization instructions to their
+underlying model. Authenticated clients can explicitly call the no-argument
+`get_knowledge_policy` tool to retrieve the same complete, authoritative policy
+text before creating or modifying SilverBullet knowledge. Its tool description
+encourages this retrieval, but tool discovery alone cannot guarantee that an AI
+client will invoke it.
+
+For example:
+
+```text
+User:
+Retrieve the active SilverBullet knowledge policy,
+then use it to update today's journal with this activity.
+```
+
 Set `MCP_INSTRUCTIONS` to a normal or multiline environment value. The server
 preserves internal newlines and removes only leading/trailing whitespace. To
 keep a longer policy in a mounted UTF-8 file, set `MCP_INSTRUCTIONS_FILE`
 instead; when both values are set, the file wins. A configured file that cannot
-be read fails startup clearly so a misconfigured deployment is not silent.
+be read fails startup clearly so a misconfigured deployment is not silent. The
+policy is resolved once during server startup and shared by the initialization
+response and `get_knowledge_policy`; restart or redeploy after changing either
+environment value or an instructions file.
 
 These values are **not secrets** and are **not a security boundary**. Server
 instructions are advisory context, not authorization: rules such as restricting
@@ -197,7 +216,7 @@ Use the same image with a different deployment policy:
 ```yaml
 services:
   silverbullet-mcp:
-    image: your-registry/silverbullet-mcp-server:0.6.1
+    image: your-registry/silverbullet-mcp-server:0.6.2
     environment:
       MCP_INSTRUCTIONS: |
         Use this server as my persistent knowledge store.
